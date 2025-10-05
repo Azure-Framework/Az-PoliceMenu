@@ -1,6 +1,3 @@
--- azframework_native_support.lua
--- Adaptation of player list and jail logic to use FiveM natives (GetPlayerName) instead of Az-Framework playerData
-
 -- Callback: Return nearby players with native names
 lib.callback.register("getPlayerList", function(source)
     local playerPed = GetPlayerPed(source)

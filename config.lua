@@ -27,7 +27,22 @@ Config.jobIdentifiers = {
         "Example3" -- Example police job identifier 3
 }
 
-
+Config.Jailer = {
+    coords = vector4(1851.050, 3690.723, 34.267, 125.543), -- <--- change to your desired X,Y,Z,Heading
+    usePeds = true,                                -- spawn a ped at the kiosk?
+    pedModel = "s_m_m_prisguard_01",               -- ped model to spawn
+    drawMarker = true,                             -- draw a marker at the kiosk
+    markerType = 2,                                -- marker style
+    markerScale = vector3(0.7, 0.7, 0.7),          -- marker scale
+    interactDist = 2.5,                            -- distance to show "Press E"
+    drawDist = 50.0,                               -- draw marker at this distance
+    helpText = "[E] Open Jailer UI",               -- shown when in range
+    cellPositions = {                              -- optional pre-set cells teleports (XYZH)
+        vector4(1840.0, 2570.0, 45.67, 90.0),
+        vector4(1837.0, 2572.0, 45.67, 90.0),
+        vector4(1834.0, 2574.0, 45.67, 90.0)
+    }
+}
 
 Config.Actions = {
 		cuffing = true,--Toggles actions true/false

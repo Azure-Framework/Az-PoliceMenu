@@ -1,5 +1,3 @@
--- client.lua
-
 local ox_target = exports.ox_target
 local pendingPoliceCheck = nil
 
@@ -87,16 +85,50 @@ function DisplayPoliceMenu()
         id      = 'police_menu',
         title   = 'Police Menu',
         options = {
-            { title = 'Clock In',  event = 'toggle_onduty',  enabled = Config.toggle_duty    },
-            { title = 'Clock Out', event = 'toggle_offDuty', enabled = Config.toggle_duty    },
-            { title = 'Actions',   event = 'policemenu',     enabled = Config.action_menu    },
-            { title = 'Citations', event = 'citations_menu', enabled = Config.citations_menu },
-            { title = 'Jailer',    event = 'jail_menu',      enabled = Config.jail_player    },
-            { title = 'Traffic Control', onSelect = function()
-                lib.showContext('menu:main')
-            end }
+            { 
+                title = 'Clock In',  
+                onSelect = function()
+                    TriggerServerEvent('toggle_onduty')
+                end,
+                enabled = Config.toggle_duty
+            },
+            { 
+                title = 'Clock Out', 
+                onSelect = function()
+                    TriggerServerEvent('toggle_offDuty')
+                end,
+                enabled = Config.toggle_duty
+            },
+            { 
+                title = 'Actions',   
+                onSelect = function()
+                    TriggerEvent('policemenu')
+                end,
+                enabled = Config.action_menu
+            },
+            { 
+                title = 'Citations', 
+                onSelect = function()
+                    TriggerEvent('citations_menu')
+                end,
+                enabled = Config.citations_menu
+            },
+            { 
+                title = 'Jailer',    
+                onSelect = function()
+                    TriggerEvent('jail_menu')
+                end,
+                enabled = Config.jail_player
+            },
+            { 
+                title = 'Traffic Control', 
+                onSelect = function()
+                    lib.showContext('menu:main')
+                end
+            }
         }
     }
     lib.registerContext(policeMenu)
     lib.showContext('police_menu')
 end
+

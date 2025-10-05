@@ -1,79 +1,204 @@
 local player, access = nil, false
 local cuffed, dragged, isdragging, plhplayer = false, false, false, 0
 
-lib.registerContext(
-    {
-        id = "policemenu",
-        title = "Police Menu",
-        canClose = true,
-        options = {
-            {
-                title = "Actions",
-                onSelect = function()
-                    lib.showContext("policeactions")
+lib.registerContext({
+    id = "policeactions",
+    title = "Police Actions",
+    canClose = true,
+    options = {
+        {
+            title = "Cuff Suspect",
+            onSelect = function() ToggleCuffs() end
+        },
+        {
+            title = "Drag Suspect",
+            onSelect = function()
+                local source = GetPlayerPed(-1)
+                ToggleDrag(source)
+            end
+        },
+        {
+            title = "Place in Vehicle",
+            onSelect = function()
+                local source = GetPlayerPed(-1)
+                PutInVehicle(source)
+            end
+        },
+        {
+            title = "Remove From Vehicle",
+            onSelect = function() UnseatVehicle() end
+        },
+        {
+            title = "Remove Weapons",
+            onSelect = function() RemoveWeapons() end
+        },
+
+        -- NEW: Breathalyze
+        {
+            title = "Breathalyze",
+            onSelect = function()
+                local closeplayer, distance = GetClosestPlayer()
+                if (distance ~= -1 and distance < 3) then
+                    local targetServerId = GetPlayerServerId(closeplayer)
+                    -- Request BAC from server (server should respond with tests:result or similar)
+                    TriggerServerEvent('tests:request', targetServerId, 'bac')
+                else
+                    ShowNotification({ title = "Error", description = "No player nearby", type = "error" })
                 end
-            }
+            end,
+            enabled = config.search_player
+        },
+
+        -- NEW: Test GSR
+        {
+            title = "Test for GSR",
+            onSelect = function()
+                local closeplayer, distance = GetClosestPlayer()
+                if (distance ~= -1 and distance < 3) then
+                    local targetServerId = GetPlayerServerId(closeplayer)
+                    -- Keep compatibility with existing server-side GSR handler
+                    TriggerServerEvent("GSR:TestPlayer", targetServerId)
+                    if Config and Config.NotifySubject then
+                        TriggerServerEvent("GSR:NotifySubject", targetServerId) -- harmless if not implemented server-side
+                    end
+                else
+                    ShowNotification({ title = "Error", description = "No player nearby", type = "error" })
+                end
+            end,
+            enabled = config.search_player
+        },
+
+        -- NEW: Drug Test
+        {
+            title = "Drug Test",
+            onSelect = function()
+                local closeplayer, distance = GetClosestPlayer()
+                if (distance ~= -1 and distance < 3) then
+                    local targetServerId = GetPlayerServerId(closeplayer)
+                    TriggerServerEvent('tests:request', targetServerId, 'drugs')
+                else
+                    ShowNotification({ title = "Error", description = "No player nearby", type = "error" })
+                end
+            end,
+            enabled = config.search_player
+        },
+
+        {
+            title = "Search Nearest Player",
+            event = "search_player",
+            enabled = config.search_player
+        },
+        {
+            title = "Back",
+            onSelect = function()
+                lib.showContext("police_menu")
+            end,
+            icon = "arrow-left",
+            description = "Go back to Police menu"
         }
     }
-)
+})
+
 if Config.UseThirdEye then
-    lib.registerContext({
+    lib.registerRadial({
         id = "policeactions",
-        title = "Police Actions",
-        canClose = true,
-        options = {
+        items = {
             {
-                title = "Cuff Suspect",
+                id = "cuff_suspect",
+                icon = "cuff",
+                label = "Cuff\nSuspect",
+                onSelect = function() ToggleCuffs() end
+            },
+            {
+                id = "drag_suspect",
+                icon = "drag",
+                label = "Drag\nSuspect",
+                onSelect = function() ToggleDrag() end
+            },
+            {
+                id = "place_in_vehicle",
+                icon = "place_vehicle",
+                label = "Place in\nVehicle",
+                onSelect = function() PutInVehicle() end
+            },
+            {
+                id = "remove_from_vehicle",
+                icon = "remove_vehicle",
+                label = "Remove From\nVehicle",
+                onSelect = function() UnseatVehicle() end
+            },
+            {
+                id = "remove_weapons",
+                icon = "remove_weapons",
+                label = "Remove\nWeapons",
+                onSelect = function() RemoveWeapons() end
+            },
+
+            -- NEW radial item: Breathalyze
+            {
+                id = "breathalyze",
+                icon = "breathalyze",
+                label = "Breathalyze",
                 onSelect = function()
-                    ToggleCuffs()
-                end
-            },
-            {
-                title = "Drag Suspect",
-                onSelect = function()
-                    local source = GetPlayerPed(-1) -- Get the source player
-                    ToggleDrag(source) -- Pass the source player to ToggleDrag
-                end
-            },
-            {
-                title = "Place in Vehicle",
-                onSelect = function()
-                    local source = GetPlayerPed(-1) -- Get the source player
-                    PutInVehicle(source) -- Pass the source player to ToggleDrag
-                end
-            },
-            {
-                title = "Remove From Vehicle",
-                onSelect = function()
-                    UnseatVehicle()
-                end
-            },
-            {
-                title = "Remove Weapons",
-                onSelect = function()
-                    RemoveWeapons()
-                end
-            },
-            {
-                title = "Test for GSR",
-                event = "gsr",
-                enabled = config.search_player
-            },
-            {
-                title = "Search Nearest Player",
-                event = "search_player",
-                enabled = config.search_player
-            },
-            {
-                title = "Back",
-                onSelect = function()
-                    lib.showContext("police_menu")
+                    local closeplayer, distance = GetClosestPlayer()
+                    if (distance ~= -1 and distance < 3) then
+                        TriggerServerEvent('tests:request', GetPlayerServerId(closeplayer), 'bac')
+                    else
+                        ShowNotification({ title = "Error", description = "No player nearby", type = "error" })
+                    end
                 end,
+                enabled = config.search_player
+            },
+
+            -- NEW radial item: Test GSR
+            {
+                id = "test_gsr",
+                icon = "gsr",
+                label = "Test for\nGSR",
+                onSelect = function()
+                    local closeplayer, distance = GetClosestPlayer()
+                    if (distance ~= -1 and distance < 3) then
+                        TriggerServerEvent("GSR:TestPlayer", GetPlayerServerId(closeplayer))
+                    else
+                        ShowNotification({ title = "Error", description = "No player nearby", type = "error" })
+                    end
+                end,
+                enabled = config.search_player
+            },
+
+            -- NEW radial item: Drug Test
+            {
+                id = "drug_test",
+                icon = "drug-test",
+                label = "Drug\nTest",
+                onSelect = function()
+                    local closeplayer, distance = GetClosestPlayer()
+                    if (distance ~= -1 and distance < 3) then
+                        TriggerServerEvent('tests:request', GetPlayerServerId(closeplayer), 'drugs')
+                    else
+                        ShowNotification({ title = "Error", description = "No player nearby", type = "error" })
+                    end
+                end,
+                enabled = config.search_player
+            },
+
+            {
+                id = "search_nearest_player",
+                icon = "search",
+                label = "Search\nNearest Player",
+                onSelect = function() TriggerEvent("search_player") end,
+                enabled = config.search_player
+            },
+            {
+                id = "back_to_police_menu",
                 icon = "arrow-left",
+                label = "Back",
+                onSelect = function() lib.showContext("police_menu") end,
                 description = "Go back to Police menu"
             }
         }
     })
+
 end
 
 -- Register the main police actions radial menu
@@ -639,7 +764,15 @@ lib.registerContext(
                 end,
                 icon = "stop",
                 description = "Completely stop traffic in the area."
-            }
+            },
+            {
+                title = 'Back',
+                onSelect = function()
+                    lib.showContext('police_menu') -- Assuming you have an 'mdt_menu' context
+                end,
+                icon = 'arrow-left',
+                description = 'Go back to Police Menu',
+            },
         }
     }
 )

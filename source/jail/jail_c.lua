@@ -1,225 +1,225 @@
-local jailedPlayers = {}
+local kioskPed = nil
+local kioskNetId = nil
+local pedSpawned = false
+local playerPed = PlayerPedId()
 
+-- helper: load model
+local function LoadModel(hash)
+    RequestModel(hash)
+    local t = GetGameTimer()
+    while not HasModelLoaded(hash) do
+        Citizen.Wait(1)
+        if (GetGameTimer() - t) > 5000 then
+            break
+        end
+    end
+    return HasModelLoaded(hash)
+end
 
+-- helper: show help text (top-left contextual)
+local function ShowHelpNotification(msg)
+    BeginTextCommandDisplayHelp("STRING")
+    AddTextComponentSubstringPlayerName(msg)
+    EndTextCommandDisplayHelp(0, 0, 1, -1)
+end
+
+-- spawn kiosk ped if enabled
+local function SpawnKioskPed()
+    if not Config.Jailer.usePeds then return end
+    local coords = Config.Jailer.coords
+    local model = GetHashKey(Config.Jailer.pedModel or "s_m_m_prisguard_01")
+    if not LoadModel(model) then
+        print("Jailer: failed to load ped model:", tostring(Config.Jailer.pedModel))
+        return
+    end
+
+    if kioskPed and DoesEntityExist(kioskPed) then
+        DeleteEntity(kioskPed)
+        kioskPed = nil
+    end
+
+    kioskPed = CreatePed(4, model, coords.x, coords.y, coords.z - 1.0, coords.w or 0.0, false, true)
+    SetEntityHeading(kioskPed, coords.w or 0.0)
+    FreezeEntityPosition(kioskPed, true)
+    SetEntityInvincible(kioskPed, true)
+    SetBlockingOfNonTemporaryEvents(kioskPed, true)
+    pedSpawned = true
+end
+
+local function DeleteKioskPed()
+    if kioskPed and DoesEntityExist(kioskPed) then
+        SetEntityAsNoLongerNeeded(kioskPed)
+        DeleteEntity(kioskPed)
+        kioskPed = nil
+    end
+    pedSpawned = false
+end
+
+-- initialize on resource start
+Citizen.CreateThread(function()
+    -- spawn ped if enabled
+    if Config.Jailer.usePeds then
+        SpawnKioskPed()
+    end
+end)
+
+-- cleanup on stop/restart
+AddEventHandler('onResourceStop', function(res)
+    if res == GetCurrentResourceName() then
+        DeleteKioskPed()
+    end
+end)
+
+-- draw marker & handle interaction
+Citizen.CreateThread(function()
+    while true do
+        Citizen.Wait(0)
+        playerPed = PlayerPedId()
+        local pcoords = GetEntityCoords(playerPed)
+        local kiosk = Config.Jailer.coords
+        local dist = #(pcoords - vector3(kiosk.x, kiosk.y, kiosk.z))
+        -- draw marker if within drawDist and enabled
+        if Config.Jailer.drawMarker and dist < Config.Jailer.drawDist then
+            DrawMarker(
+                Config.Jailer.markerType,
+                kiosk.x,
+                kiosk.y,
+                kiosk.z - 0.98,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                Config.Jailer.markerScale.x,
+                Config.Jailer.markerScale.y,
+                Config.Jailer.markerScale.z,
+                255, 120, 0, 180,
+                false,
+                true,
+                2,
+                nil,
+                nil,
+                false
+            )
+        end
+
+        -- show help & listen for E press when close enough
+        if dist <= Config.Jailer.interactDist then
+            ShowHelpNotification(Config.Jailer.helpText)
+            if IsControlJustReleased(0, 38) then -- E key
+                -- execute the command just as requested
+                ExecuteCommand("Jailer")
+            end
+        end
+    end
+end)
+
+-- Register the /Jailer command to open the UI
+RegisterCommand("Jailer", function()
+    lib.showContext('jailer_menu')
+end, false)
+
+-- register the jailer context menu (simple lib menu for now)
 lib.registerContext({
-    id = "jail_menu",
-    title = "Jail Command Context Menu",
+    id = "jailer_menu",
+    title = "Jailer Kiosk",
     canClose = true,
     options = {
         {
-            title = "Jail Player",
+            title = "Jail Player by ID",
             onSelect = function()
-                playerList()
+                local dialog = lib.inputDialog("Jail Player", {
+                    { type = 'number', label = 'Target Server ID', name = 'target', required = true },
+                    { type = 'number', label = 'Time (minutes)', name = 'time', required = true, min = 1, default = 5 },
+                    { type = 'select', label = 'Cell', name = 'cell', options = (function()
+                        local opts = {}
+                        for i = 1, #Config.Jailer.cellPositions do
+                            table.insert(opts, { value = tostring(i), label = "Cell " .. tostring(i) })
+                        end
+                        if #opts == 0 then table.insert(opts, { value = "1", label = "Cell 1" }) end
+                        return opts
+                    end)(), required = true}
+                }, { allowCancel = true, size = 'md' })
+
+                if not dialog then return end
+                local target = tonumber(dialog.target)
+                local time = tonumber(dialog.time)
+                local cellIndex = tonumber(dialog.cell) or 1
+
+                if not target or not time then
+                    lib.notify({ title = "Jailer", description = "Invalid input.", type = "error" })
+                    return
+                end
+
+                -- send to server to process jailing (server must implement jail logic)
+                TriggerServerEvent("jailer:jailPlayer", target, time, cellIndex)
+                lib.notify({ title = "Jailer", description = "Jail request sent.", type = "inform" })
             end
         },
-        { title = "Close Menu", onSelect = function() lib.hideContext(true) end },
         {
-            title = 'Back',
+            title = "Unjail Player by ID",
             onSelect = function()
-                lib.showContext('mdt_menu')
-            end,
-            icon = 'arrow-left',
-            description = 'Go back to the main menu',
+                local dialog = lib.inputDialog("Unjail Player", {
+                    { type = 'number', label = 'Target Server ID', name = 'target', required = true }
+                }, { allowCancel = true, size = 'sm' })
+
+                if not dialog then return end
+                local target = tonumber(dialog.target)
+                if not target then
+                    lib.notify({ title = "Jailer", description = "Invalid ID.", type = "error" })
+                    return
+                end
+                TriggerServerEvent("jailer:unJailPlayer", target)
+                lib.notify({ title = "Jailer", description = "Unjail request sent.", type = "inform" })
+            end
+        },
+        {
+            title = "Teleport to Cell (client)",
+            onSelect = function()
+                local opts = {}
+                for i = 1, #Config.Jailer.cellPositions do
+                    local c = Config.Jailer.cellPositions[i]
+                    table.insert(opts, { value = tostring(i), label = "Cell " .. tostring(i) })
+                end
+                if #opts == 0 then
+                    lib.notify({ title = "Jailer", description = "No cells configured.", type = "error" })
+                    return
+                end
+
+                local dialog = lib.inputDialog("Teleport to Cell", {
+                    { type = 'select', label = 'Select Cell', name = 'cell', options = opts, required = true }
+                }, { allowCancel = true, size = 'sm' })
+
+                if not dialog then return end
+                local idx = tonumber(dialog.cell) or 1
+                local pos = Config.Jailer.cellPositions[idx] or Config.Jailer.coords
+                SetEntityCoords(PlayerPedId(), pos.x, pos.y, pos.z)
+                SetEntityHeading(PlayerPedId(), pos.w or 0.0)
+                lib.notify({ title = "Jailer", description = "Teleported to cell " .. tostring(idx), type = "success" })
+            end
+        },
+        {
+            title = "Open Config (show coords)",
+            onSelect = function()
+                local c = Config.Jailer.coords
+                lib.notify({
+                    title = "Jailer Config",
+                    description = ("XYZH: %.3f, %.3f, %.3f, %.1f"):format(c.x, c.y, c.z, c.w or 0.0),
+                    type = "inform"
+                })
+            end
+        },
+        {
+            title = "Close",
+            onSelect = function() lib.hideContext(true) end
         }
     }
 })
 
-function playerList()
-    local playerOptions = lib.callback.await("getPlayerList", false)
-    local formattedPlayerOptions = {}
-
-    if type(playerOptions) == 'table' and next(playerOptions) then
-        for _, option in ipairs(playerOptions) do
-            if option.name and option.id then
-                table.insert(formattedPlayerOptions, {
-                    label = option.name,
-                    value = option.id
-                })
-            end
-        end
-    end
-
-    if #formattedPlayerOptions > 0 then
-        openJailDialog(formattedPlayerOptions)
-    else
-        print("No players found nearby to display.")
-    end
-end
-
-function openJailDialog(formattedPlayerOptions)
-    if type(formattedPlayerOptions) ~= 'table' then
-        return
-    end
-
-    for i, option in ipairs(formattedPlayerOptions) do
-        if not option.label or not option.value then
-            return
-        end
-    end
-
-    local input = lib.inputDialog('Jailer Processing', {
-        { type = 'select', label = 'Select Player', options = formattedPlayerOptions, required = true },
-        { type = 'number', label = 'Time (in minutes)', required = true, min = 1, max = 1440, step = 1 },
-        { type = 'textarea', label = 'Reason', required = true, min = 1, max = 100, autosize = true },
-        { type = 'number', label = 'Fine Amount', required = false, min = 0, step = 1 }
-    }, {
-        allowCancel = true
-    })
-
-    if not input then
-        print("Jail command was canceled.")
-        return
-    end
-
-    local playerId = input[1]
-    local jailTime = tonumber(input[2]) * 60
-    local jailReason = input[3]
-    local fineAmount = tonumber(input[4] or 0)
-
-    TriggerServerEvent('jailPlayer', playerId, jailTime, jailReason, fineAmount)
-end
-
-
-RegisterNetEvent('jail_menu')
-AddEventHandler('jail_menu', function()
-    lib.showContext('jail_menu')
+-- Server event example handlers (clients listen for confirmations)
+RegisterNetEvent("jailer:notify")
+AddEventHandler("jailer:notify", function(data)
+    -- data = { title = "...", description = "...", type = "inform" }
+    lib.notify(data)
 end)
-
-local jailed = false
-local controlsDisabled = false
-local remainingJailTime = 0
-local isTextDisplayed = false
-
-function teleportPlayer(coords)
-    local playerPed = PlayerPedId()
-
-    DoScreenFadeOut(800)
-    while not IsScreenFadedOut() do
-        Citizen.Wait(50)
-    end
-
-    SetEntityCoords(playerPed, coords.x, coords.y, coords.z)
-    while not HasCollisionLoadedAroundEntity(playerPed) do
-        Citizen.Wait(0)
-    end
-    
-    DoScreenFadeIn(800)
-end
-
-function UpdateRemainingJailTime(time)
-    remainingJailTime = time
-end
-
-function canAccessJailer(playerJob, allowedGroups)
-    for _, job in ipairs(allowedGroups) do
-        if playerJob == job then
-            return true
-        end
-    end
-    return false
-end
-
-
-
-
-RegisterNetEvent('teleportToJail')
-AddEventHandler('teleportToJail', function()
-    local jailCoords = vector3(1680.23, 2513.08, 45.56)
-    local playerPed = GetPlayerPed(-1)
-
-    RemoveAllPedWeapons(playerPed, true)
-    SetEntityCoordsNoOffset(playerPed, jailCoords.x, jailCoords.y, jailCoords.z, true, true, true)
-
-    if not jailed then
-        lib.disableControls:Add({288, 289, 170, 244})
-    end
-end)
-
-RegisterNetEvent('setJailedStatus')
-AddEventHandler('setJailedStatus', function(status, jailTime)
-    jailed = status
-    remainingJailTime = jailTime
-
-    Citizen.CreateThread(function()
-        while true do
-            Citizen.Wait(0)
-
-            if jailed then
-                if not controlsDisabled then
-                    lib.disableControls:Add({288, 289, 170, 244})
-                    controlsDisabled = true
-                end
-
-                lib.disableControls()
-
-                if remainingJailTime > 0 then
-                    Citizen.Wait(1000)
-                    remainingJailTime = remainingJailTime - 1
-                    UpdateRemainingJailTime(remainingJailTime)
-                else
-                    jailed = false
-                    isTextDisplayed = false
-                end
-            elseif controlsDisabled then
-                lib.disableControls:Clear({288, 289, 170, 244})
-                controlsDisabled = false
-            end
-        end
-    end)
-end)
-
-Citizen.CreateThread(function()
-    while true do
-        Citizen.Wait(0)
-        
-        if jailed then
-            lib.disableControls()
-
-            local remainingMinutes = math.floor(remainingJailTime / 60)
-            local remainingSeconds = remainingJailTime % 60
-
-            if remainingMinutes <= 0 and remainingSeconds <= 0 then
-                if isTextDisplayed then
-                    isTextDisplayed = false
-                    DrawAdvancedText("", 0.5, 0.95, 0.4)
-                end
-            else
-                isTextDisplayed = true
-                DrawAdvancedText("~r~Remaining Jail Time: ~w~" .. remainingMinutes .. " Minutes, " .. remainingSeconds .. " Seconds", 0.5, 0.95, 0.4)
-            end
-        end
-    end
-end)
-
-function DrawAdvancedText(text, x, y, sc)
-    SetTextScale(0.35, 0.35)
-    SetTextFont(10)
-    SetTextProportional(1)
-    SetTextColour(255, 255, 0, 255)
-    SetTextEntry("STRING")
-    AddTextComponentString(text)
-    DrawText(x, y)
-end
-
-RegisterNetEvent('unjailPlayer')
-AddEventHandler('unjailPlayer', function(unjailCoords)
-    if unjailCoords then
-        local playerPed = PlayerPedId()
-
-        DoScreenFadeOut(800)
-        while not IsScreenFadedOut() do
-            Citizen.Wait(50)
-        end
-
-        SetEntityCoords(playerPed, unjailCoords.x, unjailCoords.y, unjailCoords.z)
-
-        while not HasCollisionLoadedAroundEntity(playerPed) do
-            Citizen.Wait(0)
-        end
-
-        DoScreenFadeIn(800)
-    else
-        print("Error: Unjail coordinates were not provided.")
-    end
-end)
-

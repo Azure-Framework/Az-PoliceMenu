@@ -1,9 +1,7 @@
----@diagnostic disable: undefined-global
-
 Config = Config or {}
 Config.Debug = Config.Debug or false
 -- Provide a default list; servers should override this in a separate config file
-Config.jobIdentifiers = Config.jobIdentifiers or { "police", "sheriff", "state" }
+Config.jobIdentifiers = Config.jobIdentifiers or { "Police", "sheriff", "state" }
 
 local debugPrint = function(...) if Config.Debug then print("[Az-PoliceMenu]", ...) end end
 
@@ -22,73 +20,48 @@ local function notify(src, title, msg, typ)
     })
 end
 
--- Try multiple resource names / call styles and support both sync & async exports.
--- Calls the provided callback with jobId (string or nil).
 local function safeGetPlayerJob(src, cb)
-    assert(type(cb) == "function", "safeGetPlayerJob requires a callback")
+  assert(type(cb) == "function", "safeGetPlayerJob requires a callback")
 
-    local triedResources = {
-        "Az-Framework",
-        "az-framework",
-        "Az_Framework",
-        "az_framework",
-        -- add more common names here if needed
-    }
-
-    -- helper to attempt sync call
-    local function trySync(resName)
-        if exports and exports[resName] and type(exports[resName].getPlayerJob) == "function" then
-            local ok, res = pcall(function()
-                return exports[resName]:getPlayerJob(src)
-            end)
-            if ok then
-                debugPrint(("safeGetPlayerJob (sync) via %s -> %s"):format(resName, tostring(res)))
-                return true, res
-            else
-                debugPrint(("safeGetPlayerJob (sync) via %s errored: %s"):format(resName, tostring(res)))
-                return false, nil
-            end
-        end
-        return false, nil
-    end
-
-    -- helper to attempt async call (export takes callback)
-    local function tryAsync(resName)
-        if exports and exports[resName] and type(exports[resName].getPlayerJob) == "function" then
-            local ok, err = pcall(function()
-                exports[resName]:getPlayerJob(src, function(job)
-                    debugPrint(("safeGetPlayerJob (async) via %s -> %s"):format(resName, tostring(job)))
-                    cb(job)
-                end)
-            end)
-            if not ok then
-                debugPrint(("safeGetPlayerJob: async call to %s failed: %s"):format(resName, tostring(err)))
-                return false
-            end
-            return true
-        end
-        return false
-    end
-
-    -- Try resources in order: sync first, then async
-    for _, resName in ipairs(triedResources) do
-        local ok, res = trySync(resName)
-        if ok then
-            -- sync result (may be nil)
-            return cb(res)
-        end
-
-        local okAsync = tryAsync(resName)
-        if okAsync then
-            -- we assume async will call cb; return to avoid trying other resources
-            return
-        end
-    end
-
-    -- None found
-    debugPrint("safeGetPlayerJob: No getPlayerJob export found in known resource names")
+  if type(exports) ~= "table" then
     cb(nil)
+    return
+  end
+
+  for resName, _ in pairs(exports) do
+    local fn = exports[resName] and exports[resName].getPlayerJob
+    if type(fn) == "function" then
+      -- Try a synchronous-style call (many frameworks return value directly)
+      local ok, res = pcall(function() return exports[resName]:getPlayerJob(src) end)
+      if ok and res ~= nil then
+        if DEBUG_DISPATCH then
+          print(("[dispatch] safeGetPlayerJob sync via %s -> %s"):format(resName, tostring(res)))
+        end
+        return cb(res)
+      end
+
+      -- If sync didn't return anything, try calling it as async (with callback)
+      local okAsync, err = pcall(function()
+        exports[resName]:getPlayerJob(src, function(job)
+          if DEBUG_DISPATCH then
+            print(("[dispatch] safeGetPlayerJob async via %s -> %s"):format(resName, tostring(job)))
+          end
+          cb(job)
+        end)
+      end)
+      if okAsync then
+        return
+      end
+    end
+  end
+
+  -- nothing found
+  if DEBUG_DISPATCH then
+    print("[dispatch] safeGetPlayerJob: no export named getPlayerJob found")
+  end
+  cb(nil)
 end
+
 
 -- when a client asks “am I cop?”
 RegisterNetEvent('police:checkJob', function()
@@ -111,7 +84,6 @@ RegisterNetEvent('police:checkJob', function()
     end)
 end)
 
--- --- rest of your server logic (kept minimal & safe) ---
 LEO = { GSRList = {}, DutyPlayers = {} }
 
 RegisterNetEvent("stoicpm:shotspotter", function(location, streetName)
@@ -140,5 +112,3 @@ AddEventHandler('onResourceStart', function(resName)
     debugPrint('Az-PoliceMenu server.lua started')
     if Config.Debug then printAllowedJobs() end
 end)
-
--- End of server.lua
