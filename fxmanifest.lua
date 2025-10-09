@@ -1,8 +1,8 @@
-fx_version 'cerulean'
-game 'gta5'
+fx_version 'adamant'
+games { 'gta5' }
 dependency 'chat'
 lua54 'yes'
-version '1.2.0'
+version '1.3.0'
 author 'TheStoicBear | ValenciaModifcations'
 description 'Az-PoliceMenu'
 
@@ -17,7 +17,7 @@ client_scripts {
 }
 
 server_scripts {
-    'config_sever.lua',
+    'config_S.lua',
     '@oxmysql/lib/MySQL.lua',
     'source/search/search_s.lua',
     'source/citation/citation_s.lua',

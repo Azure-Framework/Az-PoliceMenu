@@ -1,6 +1,7 @@
 local player, access = nil, false
 local cuffed, dragged, isdragging, plhplayer = false, false, false, 0
 
+-- CONTEXT MENU: policeactions (replace your existing policeactions lib.registerContext block)
 lib.registerContext({
     id = "policeactions",
     title = "Police Actions",
@@ -59,6 +60,7 @@ lib.registerContext({
                     -- Keep compatibility with existing server-side GSR handler
                     TriggerServerEvent("GSR:TestPlayer", targetServerId)
                     if Config and Config.NotifySubject then
+                        -- optional: notify target they are being tested (server may already do this)
                         TriggerServerEvent("GSR:NotifySubject", targetServerId) -- harmless if not implemented server-side
                     end
                 else
@@ -100,6 +102,7 @@ lib.registerContext({
 })
 
 if Config.UseThirdEye then
+    -- RADIAL MENU: policeactions (replace your existing lib.registerRadial for policeactions)
     lib.registerRadial({
         id = "policeactions",
         items = {

@@ -90,4 +90,3 @@ AddEventHandler("GSR:TestCallback", function(tester, result)
         TriggerClientEvent("GSR:TestNotify", tester, Config.Text.TestedNegative)
     end
 end)
--- exports('GetPlayerTests', function(serverId) return PlayerTests[serverId] end)

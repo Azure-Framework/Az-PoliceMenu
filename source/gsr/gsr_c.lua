@@ -21,7 +21,6 @@ AddEventHandler('GSR:SelfUpdate', function(entry)
     })
 end)
 
--- When player shoots, report to server (server will set authoritative GSR)
 Citizen.CreateThread(function()
     while true do
         Citizen.Wait(1)
@@ -133,6 +132,6 @@ lib.registerContext({
 })
 
 -- Command to open the CIV menu
-RegisterCommand('civ', function()
+RegisterCommand('civself', function()
     lib.showContext('civ_self_menu')
 end)

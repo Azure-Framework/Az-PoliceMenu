@@ -158,11 +158,13 @@ AddEventHandler('toggle_offDuty', function()
   sendDiscordWebhook("Clock Out", "out", src, discordid, charid)
 end)
 
+-- Optional: an export to query a player's current in-memory duty state
 exports('IsPlayerOnDuty', function(src)
   src = tonumber(src) or source
   return DutyState[src] == true
 end)
 
+-- Optional: when player disconnects, clear memory
 AddEventHandler("playerDropped", function()
   local src = source
   DutyState[src] = nil

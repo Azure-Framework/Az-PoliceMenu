@@ -38,8 +38,6 @@ local function IsCADStarted()
     return false
 end
 
--- Helper: insert a record into testersz.mdt_id_records
--- fields: target_type, target_value, rtype, title, description, creator_identifier, creator_discord, creator_source
 local function InsertIntoCAD(opts)
     -- opts table should contain keys: target_type, target_value, rtype, title, description, creator_identifier, creator_discord, creator_source
     if not Config.CAD.enabled or not IsCADStarted() then
@@ -148,15 +146,23 @@ local function SendCitationHandler(playerId, title, message, cost)
     TriggerClientEvent('ox_lib:notify', playerId, data)
 end
 
+-- Updated DeductFine / IssueTicket / IssueParkingCitation / ImpoundVehicleHandler
+-- they now call InsertIntoCAD if CAD is running and fill creator/target fields via Az-Framework
 
 local function DeductFine(targetPlayerId, amount, reason)
-    local src = source
+    local src = source -- careful if called via server event; we'll fetch creator through var passed below
+    -- We'll get creator dynamically: in event handlers we pass creator source to these functions
+    -- For compatibility, this function expects creator to be passed in through an env var; handled below.
+
+    -- For robustness we'll implement the proper signature below in the RegisterServerEvent handlers.
     print("[CITATION] DeductFine called (this should be invoked from the proper server event handler).")
 end
 
+-- Server event handlers (adjusted to capture 'creator' source)
 RegisterServerEvent('process_fine')
 AddEventHandler('process_fine', function(targetPlayerId, amount, reason)
     local creator = source
+    -- Deduct money via Az-Framework (best-effort)
     pcall(function()
         if exports['Az-Framework'] and exports['Az-Framework'].deductMoney then
             exports['Az-Framework']:deductMoney(targetPlayerId, amount)

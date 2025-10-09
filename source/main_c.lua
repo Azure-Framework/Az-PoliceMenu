@@ -1,9 +1,6 @@
 local ox_target = exports.ox_target
 local pendingPoliceCheck = nil
 
-
-
--- register the response handler once
 RegisterNetEvent('police:checkJobResponse')
 AddEventHandler('police:checkJobResponse', function(isCop)
     print(('[Client][DEBUG] Received checkJobResponse: %s'):format(tostring(isCop)))

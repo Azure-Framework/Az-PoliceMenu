@@ -1,10 +1,17 @@
+-- Server-side: guarded search request (add to server.lua)
+
+-- Ensure Config exists; you probably already have Config. This provides a safe default.
 Config = Config or {}
 Config.AllowedDepts = Config.AllowedDepts or {} -- e.g. {"police","sheriff"}
 
+-- Helper: try to resolve player's department/job using Az-Framework exports (robust to different API shapes)
 local function resolvePlayerDepartment(src)
   if not exports['Az-Framework'] then return nil end
+
+  -- Try a few common export names / shapes
   local ok, res
 
+  -- 1) GetPlayerDepartment(src) -> string or table
   ok, res = pcall(function() return exports['Az-Framework']:GetPlayerDepartment(src) end)
   if ok and res and res ~= "" then
     if type(res) == "table" then
@@ -14,6 +21,7 @@ local function resolvePlayerDepartment(src)
     return tostring(res)
   end
 
+  -- 2) GetPlayerJob(src) -> table or string (common in some frameworks)
   ok, res = pcall(function() return exports['Az-Framework']:GetPlayerJob(src) end)
   if ok and res and res ~= "" then
     if type(res) == "table" then
@@ -21,6 +29,8 @@ local function resolvePlayerDepartment(src)
     end
     return tostring(res)
   end
+
+  -- 3) GetPlayerData / GetCharacter / GetPlayerInfo - attempt generic getters that may contain job/department
   ok, res = pcall(function() return exports['Az-Framework']:GetPlayerCharacter(src) end)
   if ok and res and type(res) == "table" then
     -- If Az-Framework returns a character table with a job/department field
@@ -75,6 +85,8 @@ AddEventHandler('search:request', function(targetServerId)
     end
   end
 
+  -- At this point: Az-Inventory not started OR no AllowedDepts configured OR department matched → allow the search
+  -- Tell the requesting client to perform the inventory open (client will call the export)
   TriggerClientEvent('search:performClient', src, targetServerId)
   print(("[search] Allowed search: src=%d -> target=%d (Az-Inventory state=%s)"):format(src, targetServerId, tostring(azInvState)))
 end)
