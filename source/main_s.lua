@@ -1,64 +1,106 @@
+---@diagnostic disable: undefined-global
+
 Config = Config or {}
 Config.Debug = Config.Debug or false
--- Provide a default list; servers should override this in a separate config file
-Config.jobIdentifiers = Config.jobIdentifiers or { "Police", "sheriff", "state" }
 
-local debugPrint = function(...) if Config.Debug then print("[Az-PoliceMenu]", ...) end end
-
--- build lookup for quick checks
-local allowedJobs = {}
-for _, id in ipairs(Config.jobIdentifiers or {}) do
-    allowedJobs[tostring(id)] = true
+local function dprint(...)
+    if Config.Debug then
+        print("[Az-PoliceMenu]", ...)
+    end
 end
 
--- helper to notify via ox_lib (keeps your existing helper)
+local allowedJobs = {}
+
+local function rebuildAllowedJobs()
+    allowedJobs = {}
+
+    if Config.jobIdentifiers == nil then
+        Config.jobIdentifiers = { "Police", "sheriff", "state" }
+        dprint("Config.jobIdentifiers was nil; using built-in default list")
+    end
+
+    for _, id in ipairs(Config.jobIdentifiers or {}) do
+        if id ~= nil then
+            allowedJobs[tostring(id)] = true
+            if type(id) == "string" then
+                allowedJobs[string.lower(id)] = true
+            end
+        end
+    end
+end
+
+rebuildAllowedJobs()
+
+local function printAllowedJobs()
+    local exact, lower = {}, {}
+    for _, id in ipairs(Config.jobIdentifiers or {}) do
+        table.insert(exact, tostring(id))
+        if type(id) == "string" then table.insert(lower, string.lower(id)) end
+    end
+    print("[Az-PoliceMenu] Config.jobIdentifiers (exact): " .. table.concat(exact, ", "))
+    print("[Az-PoliceMenu] Internal allowedJobs lowerkeys: " .. table.concat(lower, ", "))
+end
+
 local function notify(src, title, msg, typ)
-    TriggerClientEvent('ox_lib:notify', src, {
-        title       = title,
-        description = msg,
-        type        = typ
-    })
+    if TriggerClientEvent and exports and exports.ox_lib then
+        TriggerClientEvent('ox_lib:notify', src, {
+            title = title,
+            description = msg,
+            type = typ
+        })
+    else
+        dprint(("notify -> %s: %s"):format(tostring(title), tostring(msg)))
+    end
+end
+
+local function extractJobString(job)
+    if job == nil then return nil end
+
+    if type(job) == "string" then
+        return job
+    elseif type(job) == "table" then
+        if job.name then return tostring(job.name) end
+        if job.job  then return tostring(job.job) end
+        if job.label then return tostring(job.label) end
+        return tostring(job)
+    else
+        return tostring(job)
+    end
 end
 
 local function safeGetPlayerJob(src, cb)
     assert(type(cb) == "function", "safeGetPlayerJob requires a callback")
 
     local triedResources = {
-        "Az-Framework",
-        "az-framework",
-        "Az_Framework",
-        "az_framework",
-        -- add more common names here if needed
+        "Az-Framework", "az-framework", "Az_Framework", "az_framework",
+        "qb-core", "QBCore",
+        "es_extended", "esx_society"
     }
 
-    -- helper to attempt sync call
     local function trySync(resName)
         if exports and exports[resName] and type(exports[resName].getPlayerJob) == "function" then
-            local ok, res = pcall(function()
-                return exports[resName]:getPlayerJob(src)
-            end)
+            local ok, res = pcall(function() return exports[resName]:getPlayerJob(src) end)
             if ok then
-                debugPrint(("safeGetPlayerJob (sync) via %s -> %s"):format(resName, tostring(res)))
+                dprint(("safeGetPlayerJob (sync) via %s -> %s"):format(resName, tostring(res)))
                 return true, res
             else
-                debugPrint(("safeGetPlayerJob (sync) via %s errored: %s"):format(resName, tostring(res)))
+                dprint(("safeGetPlayerJob (sync) via %s errored: %s"):format(resName, tostring(res)))
                 return false, nil
             end
         end
         return false, nil
     end
 
-    -- helper to attempt async call (export takes callback)
     local function tryAsync(resName)
         if exports and exports[resName] and type(exports[resName].getPlayerJob) == "function" then
             local ok, err = pcall(function()
                 exports[resName]:getPlayerJob(src, function(job)
-                    debugPrint(("safeGetPlayerJob (async) via %s -> %s"):format(resName, tostring(job)))
+                    dprint(("safeGetPlayerJob (async) via %s -> %s"):format(resName, tostring(job)))
                     cb(job)
                 end)
             end)
             if not ok then
-                debugPrint(("safeGetPlayerJob: async call to %s failed: %s"):format(resName, tostring(err)))
+                dprint(("safeGetPlayerJob: async call to %s failed: %s"):format(resName, tostring(err)))
                 return false
             end
             return true
@@ -66,43 +108,76 @@ local function safeGetPlayerJob(src, cb)
         return false
     end
 
-    -- Try resources in order: sync first, then async
     for _, resName in ipairs(triedResources) do
-        local ok, res = trySync(resName)
-        if ok then
-            -- sync result (may be nil)
-            return cb(res)
+        local okSync, res = trySync(resName)
+        if okSync then
+            cb(res)
+            return
         end
 
         local okAsync = tryAsync(resName)
         if okAsync then
-            -- we assume async will call cb; return to avoid trying other resources
             return
         end
     end
 
-    -- None found
-    debugPrint("safeGetPlayerJob: No getPlayerJob export found in known resource names")
+    if _G["ESX"] and type(_G["ESX"].GetPlayerFromId) == "function" then
+        local ok, player = pcall(function() return ESX.GetPlayerFromId(src) end)
+        if ok and player then
+            dprint("safeGetPlayerJob via ESX global")
+            cb(player.job)
+            return
+        end
+    end
+
+    if _G["QBCore"] and type(_G["QBCore"].GetPlayer) == "function" then
+        local ok, ply = pcall(function() return QBCore.GetPlayer(src) end)
+        if ok and ply then
+            dprint("safeGetPlayerJob via QBCore global")
+            cb(ply.PlayerData and ply.PlayerData.job or nil)
+            return
+        end
+    end
+
+    dprint("safeGetPlayerJob: No getPlayerJob export found; returning nil")
     cb(nil)
 end
 
--- when a client asks “am I cop?”
 RegisterNetEvent('police:checkJob', function()
     local src = source
 
-    print(("[Police][DEBUG] Received checkJob from %d"):format(src))
+    if next(allowedJobs) == nil then
+        rebuildAllowedJobs()
+        dprint("Allowed jobs was empty; rebuilt from Config.jobIdentifiers")
+    end
 
-    safeGetPlayerJob(src, function(jobId)
-        print(("[Police][DEBUG] safeGetPlayerJob → %d has job '%s'"):format(src, tostring(jobId)))
+    dprint(("Received checkJob from %d"):format(src))
+
+    safeGetPlayerJob(src, function(jobRaw)
+        dprint(("safeGetPlayerJob raw for %d -> %s (%s)"):format(src, tostring(jobRaw), type(jobRaw)))
+
+        local jobStr = extractJobString(jobRaw)
+        dprint(("extracted job string -> %s (preserved case)"):format(tostring(jobStr)))
+
+        rebuildAllowedJobs()
 
         local isCop = false
-        if jobId ~= nil then
-            isCop = allowedJobs[tostring(jobId)] == true
+        if jobStr ~= nil then
+            if allowedJobs[jobStr] then
+                isCop = true
+                dprint(("police check: exact match passed for '%s'"):format(tostring(jobStr)))
+            else
+                local lower = string.lower(tostring(jobStr))
+                if allowedJobs[lower] then
+                    isCop = true
+                    dprint(("police check: lowercase fallback matched '%s' -> '%s'"):format(tostring(jobStr), lower))
+                end
+            end
         else
-            print(("[Police][DEBUG] Could not determine job for player %d; treating as not a cop."):format(src))
+            dprint(("Could not determine job for player %d; treating as not a cop."):format(src))
         end
 
-        print(("[Police][DEBUG] isCop = %s"):format(tostring(isCop)))
+        dprint(("isCop = %s"):format(tostring(isCop)))
         TriggerClientEvent('police:checkJobResponse', src, isCop)
     end)
 end)
@@ -122,16 +197,22 @@ local function ConvertToTime(value)
     return string.format("%02d:%02d:%02d", h, m, s)
 end
 
--- Optional: helper to print current allowed job list for debugging
-local function printAllowedJobs()
-    local list = {}
-    for k,_ in pairs(allowedJobs) do table.insert(list, tostring(k)) end
-    print("[Az-PoliceMenu] Allowed jobs: " .. table.concat(list, ", "))
-end
-
--- Print config on start if debug
 AddEventHandler('onResourceStart', function(resName)
     if GetCurrentResourceName() ~= resName then return end
-    debugPrint('Az-PoliceMenu server.lua started')
+    rebuildAllowedJobs()
+    dprint('Az-PoliceMenu server.lua started; allowed jobs rebuilt')
     if Config.Debug then printAllowedJobs() end
 end)
+
+RegisterCommand("azfw_debug_jobs", function(src)
+    if src == 0 then
+        printAllowedJobs()
+    else
+        local allowed = table.concat((function()
+            local t = {}
+            for _, id in ipairs(Config.jobIdentifiers or {}) do table.insert(t, tostring(id)) end
+            return t
+        end)(), ", ")
+        notify(src, "Az-PoliceMenu", "Allowed jobs (exact as-config): " .. allowed, "success")
+    end
+end, true)

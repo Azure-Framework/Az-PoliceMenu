@@ -2,15 +2,20 @@ fx_version 'adamant'
 games { 'gta5' }
 dependency 'chat'
 lua54 'yes'
-version '1.3.0'
+version '1.0.0'
 author 'TheStoicBear | ValenciaModifcations'
 description 'Az-PoliceMenu'
+shared_scripts {
+    "@ox_lib/init.lua",
+    "config.lua"
+} 
 
 client_scripts {
     'source/search/search_c.lua',
     'source/citation/citation_c.lua',
     'source/jail/jail_c.lua',
     'source/gsr/gsr_c.lua',
+    'source/gsr/gsr_m.lua',
     'source/main_c.lua',
     'source/actions/client.lua',
     'source/duty/client.lua'
@@ -28,7 +33,3 @@ server_scripts {
     'source/duty/server.lua'
 } 
 
-shared_scripts {
-    "@ox_lib/init.lua",
-    "config.lua"
-} 

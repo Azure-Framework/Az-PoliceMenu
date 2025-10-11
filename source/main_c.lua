@@ -12,12 +12,10 @@ AddEventHandler('police:checkJobResponse', function(isCop)
     end
 end)
 
--- ask server “am I cop?”
 local function IsPoliceJob(cb)
     print("[Client][DEBUG] IsPoliceJob() → sending request")
     pendingPoliceCheck = cb
     TriggerServerEvent('police:checkJob')
-    -- timeout guard
     SetTimeout(5000, function()
         if pendingPoliceCheck then
             print("[Client][DEBUG] No response within 5s, defaulting to false")
@@ -27,7 +25,6 @@ local function IsPoliceJob(cb)
     end)
 end
 
--- ox_target menu entry
 local actionMenuOptions = {{
     name      = "openActionMenu",
     icon      = Config.ThirdEyeIcon,
@@ -48,12 +45,11 @@ local actionMenuOptions = {{
     end
 }}
 
--- register ox_target + F7 key
 CreateThread(function()
     ox_target:addGlobalPlayer(actionMenuOptions)
     while true do
         Wait(0)
-        if IsControlJustReleased(0, 168) then -- F7
+        if IsControlJustReleased(0, 168) then
             IsPoliceJob(function(ok)
                 if ok then
                     DisplayPoliceMenu()
@@ -65,7 +61,6 @@ CreateThread(function()
     end
 end)
 
--- fallback command
 RegisterCommand('policeMenu', function()
     IsPoliceJob(function(ok)
         if ok then
@@ -76,7 +71,6 @@ RegisterCommand('policeMenu', function()
     end)
 end, false)
 
--- build & show the menu
 function DisplayPoliceMenu()
     local policeMenu = {
         id      = 'police_menu',
@@ -111,13 +105,6 @@ function DisplayPoliceMenu()
                 enabled = Config.citations_menu
             },
             { 
-                title = 'Jailer',    
-                onSelect = function()
-                    TriggerEvent('jail_menu')
-                end,
-                enabled = Config.jail_player
-            },
-            { 
                 title = 'Traffic Control', 
                 onSelect = function()
                     lib.showContext('menu:main')
@@ -128,4 +115,3 @@ function DisplayPoliceMenu()
     lib.registerContext(policeMenu)
     lib.showContext('police_menu')
 end
-

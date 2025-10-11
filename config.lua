@@ -8,7 +8,8 @@ config = {
     mdt = true,
 }
 
-Config = {}
+Config = Config or {}
+
 Config.UseThirdEye = true -- WIP To use Third Eye instead of Radial Menu
 Config.ThirdEyeIcon = "fa-solid fa-handcuffs" -- Third Eye Font Awesome ICON
 Config.ThirdEyeIconColor = "#0702fa" -- Third Eye Color for the Icon
@@ -21,11 +22,7 @@ Config.GSRAutoClean = 900 -- (IN SECONDS) Ammount Of Time Before GSR Auto Cleans
 Config.GSRTestDistance = 3 -- Maximum Distance That You Can Be To Test For GSR ***I Recomend Leaving This Low***
 Config.TestGSR = "gsr" -- Command To Test For GSR
 Config.CleanGSR = "cleangsr" -- Command To Clean GSR
-Config.jobIdentifiers = {
-        "Police", -- Example police job identifier 1
-        "Example2", -- Example police job identifier 2
-        "Example3" -- Example police job identifier 3
-}
+Config.jobIdentifiers = { "Police", "sheriff", "state" }
 
 Config.Jailer = {
     coords = vector4(1851.050, 3690.723, 34.267, 125.543), -- <--- change to your desired X,Y,Z,Heading

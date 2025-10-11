@@ -1,3 +1,4 @@
+-- Utility: execute SQL using available MySQL resource (tries oxmysql then mysql-async)
 local function ExecuteSQL(query, params, cb)
     cb = cb or function() end
     if GetResourceState("oxmysql") == "started" or GetResourceState("oxmysql") == "starting" then
@@ -38,6 +39,8 @@ local function IsCADStarted()
     return false
 end
 
+-- Helper: insert a record into testersz.mdt_id_records
+-- fields: target_type, target_value, rtype, title, description, creator_identifier, creator_discord, creator_source
 local function InsertIntoCAD(opts)
     -- opts table should contain keys: target_type, target_value, rtype, title, description, creator_identifier, creator_discord, creator_source
     if not Config.CAD.enabled or not IsCADStarted() then

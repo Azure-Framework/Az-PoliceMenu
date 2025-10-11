@@ -115,10 +115,7 @@ Citizen.CreateThread(function()
     end
 end)
 
--- Register the /Jailer command to open the UI
-RegisterCommand("Jailer", function()
-    lib.showContext('jailer_menu')
-end, false)
+
 
 -- register the jailer context menu (simple lib menu for now)
 lib.registerContext({
