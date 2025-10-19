@@ -1,41 +1,60 @@
----@diagnostic disable: undefined-global
-
-Config = Config or {}
-Config.Debug = Config.Debug or false
 
 local function dprint(...)
-    if Config.Debug then
+    if Config and Config.Debug then
         print("[Az-PoliceMenu]", ...)
     end
 end
 
+-- simple table->string helper (handles nested tables, avoids cycles)
+local function dump(o, seen)
+    seen = seen or {}
+    if type(o) ~= "table" then return tostring(o) end
+    if seen[o] then return "<cycle>" end
+    seen[o] = true
+    local parts = {}
+    for k, v in pairs(o) do
+        table.insert(parts, tostring(k) .. " = " .. dump(v, seen))
+    end
+    return "{ " .. table.concat(parts, ", ") .. " }"
+end
+
+-- Allowed jobs map
 local allowedJobs = {}
 
+-- Build allowedJobs strictly from Config.jobIdentifiers (safe if nil)
 local function rebuildAllowedJobs()
     allowedJobs = {}
 
-    if Config.jobIdentifiers == nil then
-        if Config.PoliceJobs and #Config.PoliceJobs > 0 then
-            Config.jobIdentifiers = Config.PoliceJobs
-            dprint("Config.jobIdentifiers was nil; using Config.PoliceJobs")
-        else
-            Config.jobIdentifiers = { "Police", "sheriff", "state" }
-            dprint("Config.jobIdentifiers was nil; using built-in default list")
-        end
+    if not Config or not Config.jobIdentifiers then
+        print("[Az-PoliceMenu] WARNING: Config.jobIdentifiers is nil; using default { 'police' }")
+        Config.jobIdentifiers = { "police" }
     end
 
+    if type(Config.jobIdentifiers) ~= "table" then
+        print("[Az-PoliceMenu] ERROR: Config.jobIdentifiers must be a table. Coercing to default.")
+        Config.jobIdentifiers = { "police" }
+    end
 
-    for _, id in ipairs(Config.jobIdentifiers or {}) do
-        if id ~= nil then
-            allowedJobs[tostring(id)] = true
-            if type(id) == "string" then
-                allowedJobs[string.lower(id)] = true
-            end
+    print("[Az-PoliceMenu] rebuildAllowedJobs -> using Config.jobIdentifiers:")
+    for i, v in ipairs(Config.jobIdentifiers or {}) do
+        print(("  [%d] %s"):format(i, tostring(v)))
+        if v ~= nil then
+            allowedJobs[tostring(v)] = true
+            if type(v) == "string" then allowedJobs[string.lower(v)] = true end
         end
     end
 end
 
+local function dumpAllowedJobs()
+    local keys = {}
+    for k, _ in pairs(allowedJobs) do table.insert(keys, tostring(k)) end
+    table.sort(keys)
+    print("[Az-PoliceMenu] internal allowedJobs keys: " .. (next(keys) and table.concat(keys, ", ") or "<empty>"))
+end
+
+-- initial build
 rebuildAllowedJobs()
+dumpAllowedJobs()
 
 local function printAllowedJobs()
     local exact, lower = {}, {}
@@ -68,12 +87,20 @@ local function extractJobString(job)
         if job.name then return tostring(job.name) end
         if job.job  then return tostring(job.job) end
         if job.label then return tostring(job.label) end
+        if job.PlayerData and job.PlayerData.job then
+            if type(job.PlayerData.job) == "string" then
+                return tostring(job.PlayerData.job)
+            elseif type(job.PlayerData.job) == "table" and job.PlayerData.job.name then
+                return tostring(job.PlayerData.job.name)
+            end
+        end
         return tostring(job)
     else
         return tostring(job)
     end
 end
 
+-- Robust getter (tries multiple exports/globals)
 local function safeGetPlayerJob(src, cb)
     assert(type(cb) == "function", "safeGetPlayerJob requires a callback")
 
@@ -127,6 +154,7 @@ local function safeGetPlayerJob(src, cb)
         end
     end
 
+    -- ESX global fallback
     if _G["ESX"] and type(_G["ESX"].GetPlayerFromId) == "function" then
         local ok, player = pcall(function() return ESX.GetPlayerFromId(src) end)
         if ok and player then
@@ -136,6 +164,7 @@ local function safeGetPlayerJob(src, cb)
         end
     end
 
+    -- QBCore global fallback
     if _G["QBCore"] and type(_G["QBCore"].GetPlayer) == "function" then
         local ok, ply = pcall(function() return QBCore.GetPlayer(src) end)
         if ok and ply then
@@ -149,58 +178,45 @@ local function safeGetPlayerJob(src, cb)
     cb(nil)
 end
 
--- Replace existing 'police:checkJob' handler with this code.
+-- Simple, defensive police check (works even if Config.jobIdentifiers missing)
 RegisterNetEvent('police:checkJob', function()
     local src = source
 
-    if next(allowedJobs) == nil then
-        rebuildAllowedJobs()
-        dprint("Allowed jobs was empty; rebuilt from Config.jobIdentifiers")
-    end
-
-    dprint(("Received checkJob from %d (Az-Framework only)"):format(src))
-
-    -- Attempt to get job solely via Az-Framework export
-    local jobRaw = nil
-    if exports and exports["Az-Framework"] and type(exports["Az-Framework"].getPlayerJob) == "function" then
-        local ok, res = pcall(function()
-            return exports["Az-Framework"]:getPlayerJob(src)
-        end)
-        if ok then
-            jobRaw = res
-            dprint(("Az-Framework getPlayerJob returned: %s"):format(tostring(res)))
-        else
-            dprint(("Az-Framework getPlayerJob errored for %d: %s"):format(src, tostring(res)))
-        end
-    else
-        dprint("Az-Framework export getPlayerJob NOT found.")
-    end
-
-    local jobStr = extractJobString(jobRaw)
-    dprint(("extracted job string -> %s (preserved case)"):format(tostring(jobStr)))
-
+    -- ensure allowedJobs is up-to-date (safe)
     rebuildAllowedJobs()
+    dumpAllowedJobs()
 
-    local isCop = false
-    if jobStr ~= nil then
-        if allowedJobs[jobStr] then
-            isCop = true
-            dprint(("police check: exact match passed for '%s'"):format(tostring(jobStr)))
-        else
-            local lower = string.lower(tostring(jobStr))
-            if allowedJobs[lower] then
-                isCop = true
-                dprint(("police check: lowercase fallback matched '%s' -> '%s'"):format(tostring(jobStr), lower))
+    dprint(("Received checkJob from %d"):format(src))
+
+    safeGetPlayerJob(src, function(jobRaw)
+        print((" [Az-PoliceMenu] [JOB DEBUG] player %d raw job: %s"):format(src, dump(jobRaw)))
+        local jobStr = extractJobString(jobRaw)
+        print((" [Az-PoliceMenu] [JOB DEBUG] player %d extracted job string: %s"):format(src, tostring(jobStr)))
+
+        local isCop = false
+        if jobStr ~= nil then
+            local jobLower = string.lower(tostring(jobStr))
+            for _, v in ipairs(Config.jobIdentifiers or {}) do
+                if jobLower == string.lower(tostring(v)) then
+                    isCop = true
+                    break
+                end
             end
+            if isCop then
+                print((" [Az-PoliceMenu] police check: matched '%s'"):format(jobLower))
+            else
+                print((" [Az-PoliceMenu] police check: no match for '%s'"):format(jobLower))
+            end
+        else
+            print((" [Az-PoliceMenu] Could not determine job for player %d; treating as not a cop."):format(src))
         end
-    else
-        dprint(("Could not determine job for player %d via Az-Framework; treating as not a cop."):format(src))
-    end
 
-    dprint(("isCop = %s"):format(tostring(isCop)))
-    TriggerClientEvent('police:checkJobResponse', src, isCop)
+        print((" [Az-PoliceMenu] isCop = %s"):format(tostring(isCop)))
+        TriggerClientEvent('police:checkJobResponse', src, isCop)
+    end)
 end)
 
+-- LEO helpers
 LEO = { GSRList = {}, DutyPlayers = {} }
 
 RegisterNetEvent("stoicpm:shotspotter", function(location, streetName)
@@ -216,11 +232,12 @@ local function ConvertToTime(value)
     return string.format("%02d:%02d:%02d", h, m, s)
 end
 
+-- Resource start / debug command
 AddEventHandler('onResourceStart', function(resName)
     if GetCurrentResourceName() ~= resName then return end
     rebuildAllowedJobs()
     dprint('Az-PoliceMenu server.lua started; allowed jobs rebuilt')
-    if Config.Debug then printAllowedJobs() end
+    printAllowedJobs()
 end)
 
 RegisterCommand("azfw_debug_jobs", function(src)
