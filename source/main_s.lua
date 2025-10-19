@@ -15,9 +15,15 @@ local function rebuildAllowedJobs()
     allowedJobs = {}
 
     if Config.jobIdentifiers == nil then
-        Config.jobIdentifiers = { "Police", "sheriff", "state" }
-        dprint("Config.jobIdentifiers was nil; using built-in default list")
+        if Config.PoliceJobs and #Config.PoliceJobs > 0 then
+            Config.jobIdentifiers = Config.PoliceJobs
+            dprint("Config.jobIdentifiers was nil; using Config.PoliceJobs")
+        else
+            Config.jobIdentifiers = { "Police", "sheriff", "state" }
+            dprint("Config.jobIdentifiers was nil; using built-in default list")
+        end
     end
+
 
     for _, id in ipairs(Config.jobIdentifiers or {}) do
         if id ~= nil then
@@ -143,6 +149,7 @@ local function safeGetPlayerJob(src, cb)
     cb(nil)
 end
 
+-- Replace existing 'police:checkJob' handler with this code.
 RegisterNetEvent('police:checkJob', function()
     local src = source
 
@@ -151,35 +158,47 @@ RegisterNetEvent('police:checkJob', function()
         dprint("Allowed jobs was empty; rebuilt from Config.jobIdentifiers")
     end
 
-    dprint(("Received checkJob from %d"):format(src))
+    dprint(("Received checkJob from %d (Az-Framework only)"):format(src))
 
-    safeGetPlayerJob(src, function(jobRaw)
-        dprint(("safeGetPlayerJob raw for %d -> %s (%s)"):format(src, tostring(jobRaw), type(jobRaw)))
-
-        local jobStr = extractJobString(jobRaw)
-        dprint(("extracted job string -> %s (preserved case)"):format(tostring(jobStr)))
-
-        rebuildAllowedJobs()
-
-        local isCop = false
-        if jobStr ~= nil then
-            if allowedJobs[jobStr] then
-                isCop = true
-                dprint(("police check: exact match passed for '%s'"):format(tostring(jobStr)))
-            else
-                local lower = string.lower(tostring(jobStr))
-                if allowedJobs[lower] then
-                    isCop = true
-                    dprint(("police check: lowercase fallback matched '%s' -> '%s'"):format(tostring(jobStr), lower))
-                end
-            end
+    -- Attempt to get job solely via Az-Framework export
+    local jobRaw = nil
+    if exports and exports["Az-Framework"] and type(exports["Az-Framework"].getPlayerJob) == "function" then
+        local ok, res = pcall(function()
+            return exports["Az-Framework"]:getPlayerJob(src)
+        end)
+        if ok then
+            jobRaw = res
+            dprint(("Az-Framework getPlayerJob returned: %s"):format(tostring(res)))
         else
-            dprint(("Could not determine job for player %d; treating as not a cop."):format(src))
+            dprint(("Az-Framework getPlayerJob errored for %d: %s"):format(src, tostring(res)))
         end
+    else
+        dprint("Az-Framework export getPlayerJob NOT found.")
+    end
 
-        dprint(("isCop = %s"):format(tostring(isCop)))
-        TriggerClientEvent('police:checkJobResponse', src, isCop)
-    end)
+    local jobStr = extractJobString(jobRaw)
+    dprint(("extracted job string -> %s (preserved case)"):format(tostring(jobStr)))
+
+    rebuildAllowedJobs()
+
+    local isCop = false
+    if jobStr ~= nil then
+        if allowedJobs[jobStr] then
+            isCop = true
+            dprint(("police check: exact match passed for '%s'"):format(tostring(jobStr)))
+        else
+            local lower = string.lower(tostring(jobStr))
+            if allowedJobs[lower] then
+                isCop = true
+                dprint(("police check: lowercase fallback matched '%s' -> '%s'"):format(tostring(jobStr), lower))
+            end
+        end
+    else
+        dprint(("Could not determine job for player %d via Az-Framework; treating as not a cop."):format(src))
+    end
+
+    dprint(("isCop = %s"):format(tostring(isCop)))
+    TriggerClientEvent('police:checkJobResponse', src, isCop)
 end)
 
 LEO = { GSRList = {}, DutyPlayers = {} }
