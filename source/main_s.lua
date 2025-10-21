@@ -27,12 +27,12 @@ local function rebuildAllowedJobs()
 
     if not Config or not Config.jobIdentifiers then
         print("[Az-PoliceMenu] WARNING: Config.jobIdentifiers is nil; using default { 'police' }")
-        Config.jobIdentifiers = { "police" }
+
     end
 
     if type(Config.jobIdentifiers) ~= "table" then
         print("[Az-PoliceMenu] ERROR: Config.jobIdentifiers must be a table. Coercing to default.")
-        Config.jobIdentifiers = { "police" }
+
     end
 
     print("[Az-PoliceMenu] rebuildAllowedJobs -> using Config.jobIdentifiers:")

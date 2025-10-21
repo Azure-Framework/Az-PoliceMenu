@@ -9,12 +9,6 @@ config = {
 }
 
 Config = Config or {}
-
-jobIdentifiers = {
-     "police" 
-}
-
-
 Config.UseThirdEye = true -- WIP To use Third Eye instead of Radial Menu
 Config.ThirdEyeIcon = "fa-solid fa-handcuffs" -- Third Eye Font Awesome ICON
 Config.ThirdEyeIconColor = "#0702fa" -- Third Eye Color for the Icon

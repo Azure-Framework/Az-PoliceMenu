@@ -2,7 +2,7 @@ fx_version 'adamant'
 games { 'gta5' }
 dependency 'chat'
 lua54 'yes'
-version '1.3.1'
+version '1.3.2'
 author 'TheStoicBear | ValenciaModifcations'
 description 'Az-PoliceMenu'
 shared_scripts {
@@ -32,6 +32,4 @@ server_scripts {
     'source/actions/server.lua',
     'source/duty/server.lua'
 } 
-
-
 

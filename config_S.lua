@@ -1,4 +1,6 @@
 Config = {}
+
+Config.jobIdentifiers = { "MOLICE", "sheriff", "state" }-- Job identifiers (consistent casing — change to match your framework)
 Config.toggle_duty = true                     -- enable/disable the toggle items in your menu
 Config.duty_table_name = "duty_records"       -- DB table name
 Config.clock_webhook_url = "https://discord.com/api/webhooks/1424204424573747351/WIPmL6NhwfETxkpRP6xGOJ1RgZTzT5dr1on-LlMovCWbHXmgb2GXc35_cvxHoSr1NKZo"  -- <- PUT YOUR WEBHOOK HERE
