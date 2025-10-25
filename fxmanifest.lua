@@ -2,7 +2,7 @@ fx_version 'adamant'
 games { 'gta5' }
 dependency 'chat'
 lua54 'yes'
-version '1.3.2'
+version '1.0.0'
 author 'TheStoicBear | ValenciaModifcations'
 description 'Az-PoliceMenu'
 shared_scripts {
